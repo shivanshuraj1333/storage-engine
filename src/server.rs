@@ -1,5 +1,8 @@
 use crate::error::ProcessingError;
-use crate::proto::server::*;
+use crate::proto::storage_engine::{
+    storage_engine_server::StorageEngine,
+    Message, ProcessResponse
+};
 use tokio::sync::mpsc;
 use tonic::{Request, Response, Status};
 
@@ -33,9 +36,9 @@ impl StorageEngine for ListenerServer {
         match self.message_sender.send(message).await {
             Ok(_) => Ok(Response::new(ProcessResponse {
                 success: true,
-                message: "Message processed".to_string(),
+                message: "Message queued for processing".to_string(),
             })),
-            Err(_) => Err(Status::internal("Failed to process message")),
+            Err(_) => Err(Status::internal("Failed to queue message for processing")),
         }
     }
 }
@@ -43,9 +46,9 @@ impl StorageEngine for ListenerServer {
 impl From<ProcessingError> for Status {
     fn from(error: ProcessingError) -> Self {
         match error {
-            ProcessingError::InvalidMessage(msg) => Status::invalid_argument(msg),
+            ProcessingError::ValidationError(msg) => Status::invalid_argument(msg),
             ProcessingError::ProcessingFailed(msg) => Status::internal(msg),
-            ProcessingError::ChannelError(msg) => Status::internal(msg),
+            ProcessingError::StorageError(msg) => Status::internal(msg),
         }
     }
 }

@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 use tracing::{error, info};
 
 use crate::error::ProcessingError;
-use crate::proto::common::Message;
+use crate::proto::storage_engine::{Message, ProcessResponse};
 
 /*
     Contains the EngineCore implementation
@@ -23,29 +23,29 @@ impl EngineCore {
 
     pub async fn process_messages(&mut self) {
         while let Some(message) = self.message_receiver.recv().await {
-            match self.process_single_message(message).await {
+            match self.process_message(message).await {
                 Ok(_) => info!("Message processed successfully"),
                 Err(e) => error!("Failed to process message: {}", e),
             }
         }
     }
 
-    async fn process_single_message(&self, message: Message) -> Result<(), ProcessingError> {
+    pub async fn process_message(&self, message: Message) -> Result<ProcessResponse, ProcessingError> {
         // Validate message
         if message.id.is_empty() {
-            return Err(ProcessingError::InvalidMessage(
-                "Message ID is required".to_string(),
-            ));
+            return Err(ProcessingError::ValidationError("Empty message ID".into()));
         }
-        // Basic message processing
-        info!(
-            "Processing message: id={}, timestamp={}",
+
+        // Log processing
+        tracing::info!(
+            "Processing message {} at timestamp {}",
             message.id, message.timestamp
         );
 
-        // TODO: Add metadata extraction
-        // TODO: Add storage writing logic
-
-        Ok(())
+        // Return success response
+        Ok(ProcessResponse {
+            success: true,
+            message: "Message processed successfully".into(),
+        })
     }
 }

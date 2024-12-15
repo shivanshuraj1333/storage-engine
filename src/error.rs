@@ -2,14 +2,14 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ProcessingError {
-    #[error("Invalid message: {0}")]
-    InvalidMessage(String),
+    #[error("Validation error: {0}")]
+    ValidationError(String),
 
     #[error("Processing failed: {0}")]
     ProcessingFailed(String),
 
-    #[error("Channel error: {0}")]
-    ChannelError(String),
+    #[error("Storage error: {0}")]
+    StorageError(String),
 }
 
 #[derive(Error, Debug)]

@@ -1,8 +1,15 @@
-use storage_engine::proto::server::StorageEngineServer;
+use storage_engine::proto::storage_engine::storage_engine_server::StorageEngineServer;
 use storage_engine::{EngineCore, ListenerServer};
 use tokio::sync::mpsc;
 use tonic::transport::Server;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("Failed to install CTRL+C signal handler");
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,11 +34,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
 
     // Start gRPC server
-    println!("Server listening on {}", addr);
-    Server::builder()
+    info!("Server listening on {}", addr);
+    let server = Server::builder()
         .add_service(StorageEngineServer::new(listener_server))
-        .serve(addr)
-        .await?;
+        .serve(addr);
+
+    let shutdown = shutdown_signal();
+    tokio::select! {
+        result = server => {
+            if let Err(e) = result {
+                warn!("Server error: {}", e);
+            }
+        }
+        _ = shutdown => {
+            info!("Shutting down gracefully...");
+        }
+    }
 
     Ok(())
 }

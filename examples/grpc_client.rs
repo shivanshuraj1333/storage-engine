@@ -5,7 +5,7 @@
 */
 
 #[cfg(feature = "client")]
-use storage_engine::proto::{client::StorageEngineClient, common::Message};
+use storage_engine::proto::{Message, StorageEngineClient};
 
 #[cfg(feature = "client")]
 use tonic::transport::Channel;
@@ -98,3 +98,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn main() {
     println!("This binary requires the 'client' feature to be enabled");
 }
+
