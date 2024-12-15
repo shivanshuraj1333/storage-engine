@@ -1,34 +1,47 @@
+use std::borrow::Cow;
 use std::time::Duration;
 use std::sync::Arc;
-
 use tokio::sync::mpsc;
 use tokio::time::{self, Instant};
-
 use tracing::{error, info};
 
 use crate::config::ProcessingConfig;
-
 use crate::error::{ProcessingError, StorageError};
-
-use crate::proto::storage_engine::{Message, ProcessResponse};
-
+use crate::proto::{ExportTraceServiceRequest, ExportTraceServiceResponse, Span};
 use crate::storage::{S3StorageWriter, StorageWriter};
-
 use crate::health::HealthCheck;
 
-/// Core engine that handles message processing and batching
+use opentelemetry::{
+    sdk::{
+        export::trace::SpanData,
+        trace::{EvictedHashMap, EvictedQueue},
+    },
+    trace::{SpanContext, SpanId, SpanKind, Status, TraceFlags, TraceId, TraceState},
+};
+
+/// Core engine responsible for processing and storing trace data.
+/// Handles message batching, span conversion, and storage operations.
 pub struct EngineCore {
-    message_receiver: mpsc::Receiver<Message>,
+    /// Channel for receiving trace messages
+    message_receiver: mpsc::Receiver<ExportTraceServiceRequest>,
+    /// Maximum number of messages to process in a batch
     batch_size: usize,
+    /// Maximum time to wait before processing a partial batch
     batch_timeout: Duration,
-    message_queue: Vec<Message>,
+    /// Queue for accumulating messages before batch processing
+    message_queue: Vec<ExportTraceServiceRequest>,
+    /// Storage backend for persisting trace data
     storage_writer: S3StorageWriter,
+    /// Health monitoring for the engine
     health_check: Arc<HealthCheck>,
 }
 
 impl EngineCore {
     /// Creates a new EngineCore with the specified configuration
-    pub async fn new(receiver: mpsc::Receiver<Message>, config: ProcessingConfig) -> Result<Self, StorageError> {
+    pub async fn new(
+        receiver: mpsc::Receiver<ExportTraceServiceRequest>,
+        config: ProcessingConfig,
+    ) -> Result<Self, StorageError> {
         let storage_writer = S3StorageWriter::new(
             "my-test-bucket".to_string(),
             "messages".to_string(),
@@ -44,11 +57,15 @@ impl EngineCore {
         })
     }
 
+    /// Returns a reference to the health check monitor
     pub fn get_health_check(&self) -> Arc<HealthCheck> {
         Arc::clone(&self.health_check)
     }
 
     /// Main message processing loop
+    /// Handles batching of messages and triggers processing based on:
+    /// - Batch size threshold
+    /// - Timeout threshold
     pub async fn process_messages(&mut self) {
         let mut batch_timer = time::interval_at(
             Instant::now() + self.batch_timeout,
@@ -57,11 +74,13 @@ impl EngineCore {
 
         loop {
             tokio::select! {
+                // Process batch on timer tick if queue not empty
                 _ = batch_timer.tick() => {
                     if !self.message_queue.is_empty() {
                         self.process_batch().await;
                     }
                 }
+                // Process new messages as they arrive
                 Some(message) = self.message_receiver.recv() => {
                     self.message_queue.push(message);
                     if self.message_queue.len() >= self.batch_size {
@@ -75,7 +94,7 @@ impl EngineCore {
         }
     }
 
-    /// Processes a batch of messages
+    /// Processes a batch of accumulated messages
     async fn process_batch(&mut self) {
         info!("Processing batch of {} messages", self.message_queue.len());
         
@@ -88,55 +107,87 @@ impl EngineCore {
         }
     }
 
-    /// Processes a single message
-    async fn process_message(&self, message: Message) -> Result<ProcessResponse, ProcessingError> {
-        if message.id.is_empty() {
-            return Err(ProcessingError::ValidationError("Empty message ID".into()));
-        }
+    /// Processes a single message, converting it to spans and storing them
+    async fn process_message(
+        &self,
+        request: ExportTraceServiceRequest
+    ) -> Result<ExportTraceServiceResponse, ProcessingError> {
+        let spans = self.convert_request_to_spans(request)?;
+        
+        self.storage_writer.write_spans(spans).await
+            .map_err(|e| ProcessingError::StorageError(e.to_string()))?;
 
-        // Prepare message data
-        let data = format!(
-            "Message ID: {}\nContent: {}\nTimestamp: {}", 
-            message.id, 
-            message.content,
-            message.timestamp
-        );
+        self.health_check.record_successful_write();
+        Ok(ExportTraceServiceResponse {})
+    }
 
-        // Write to storage
-        match self.storage_writer
-            .write(&message.id, data.as_bytes())
-            .await
-        {
-            Ok(_) => {
-                self.health_check.record_successful_write();
-                info!(
-                    "Processing message {} at timestamp {}",
-                    message.id, message.timestamp
-                );
-            }
-            Err(e) => {
-                self.health_check.record_failed_write();
-                return Err(ProcessingError::StorageError(e.to_string()));
+    /// Converts a trace request into OpenTelemetry spans
+    fn convert_request_to_spans(
+        &self,
+        request: ExportTraceServiceRequest
+    ) -> Result<Vec<SpanData>, ProcessingError> {
+        let mut spans = Vec::new();
+        
+        for resource_spans in request.resource_spans {
+            for scope_spans in resource_spans.scope_spans {
+                for span in scope_spans.spans {
+                    spans.push(self.convert_span(span)?);
+                }
             }
         }
 
-        Ok(ProcessResponse {
-            success: true,
-            message: "Message processed and stored successfully".into(),
+        Ok(spans)
+    }
+
+    /// Converts a proto span into an OpenTelemetry span
+    fn convert_span(&self, span: Span) -> Result<SpanData, ProcessingError> {
+        let parent_span_id = if !span.parent_span_id.is_empty() {
+            SpanId::from_hex(&hex::encode(&span.parent_span_id))
+                .map_err(|e| ProcessingError::ValidationError(e.to_string()))?
+        } else {
+            SpanId::INVALID
+        };
+
+        Ok(SpanData {
+            span_context: self.create_span_context(&span)?,
+            parent_span_id,
+            span_kind: SpanKind::Client,
+            name: Cow::from(span.name),
+            start_time: std::time::SystemTime::UNIX_EPOCH + 
+                std::time::Duration::from_nanos(span.start_time_unix_nano),
+            end_time: std::time::SystemTime::UNIX_EPOCH + 
+                std::time::Duration::from_nanos(span.end_time_unix_nano),
+            attributes: EvictedHashMap::new(Default::default(), 128),
+            events: EvictedQueue::new(128),
+            links: EvictedQueue::new(128),
+            status: Status::Ok,
+            resource: Default::default(),
+            instrumentation_lib: Default::default(),
         })
     }
 
+    /// Creates a span context from a proto span
+    fn create_span_context(&self, span: &Span) -> Result<SpanContext, ProcessingError> {
+        Ok(SpanContext::new(
+            TraceId::from_hex(&hex::encode(&span.trace_id))
+                .map_err(|e| ProcessingError::ValidationError(e.to_string()))?,
+            SpanId::from_hex(&hex::encode(&span.span_id))
+                .map_err(|e| ProcessingError::ValidationError(e.to_string()))?,
+            TraceFlags::default(),
+            false,
+            TraceState::default(),
+        ))
+    }
+
+    /// Performs graceful shutdown, processing remaining messages
     pub async fn shutdown(&mut self) -> Result<(), ProcessingError> {
         info!("Initiating graceful shutdown...");
         
-        // Process remaining messages
         while let Some(message) = self.message_queue.pop() {
             self.process_message(message).await?;
         }
         
-        // Flush any remaining writes
         self.storage_writer.flush().await?;
-        
         info!("Shutdown complete");
         Ok(())
     }

@@ -1,9 +1,61 @@
-# Rust Storage Engine
+# OpenTelemetry Storage Engine
 
-A high-performance asynchronous message processing and storage engine built with Rust, featuring gRPC communication and
-modular architecture.
+A high-performance asynchronous trace storage engine built with Rust, featuring OpenTelemetry protocol support, S3-compatible storage, and health monitoring.
 
-## Architecture Overview
+## Features
+
+- **OpenTelemetry Support**
+  - OTLP protocol implementation
+  - Trace collection and storage
+  - Span batching and processing
+
+- **Storage**
+  - S3-compatible backend
+  - Configurable batching
+  - Efficient data organization
+
+- **Monitoring**
+  - Health check endpoints
+  - Performance metrics
+  - Error tracking
+
+- **API**
+  - gRPC for trace collection
+  - REST for querying spans
+  - Health status endpoints
+
+## Quick Start
+
+1. **Prerequisites**
+```bash
+# Required tools
+- Rust 1.70+
+- Docker
+- AWS CLI
+```
+
+2. **Setup LocalStack**
+```bash
+# Start LocalStack
+docker run --rm -it -p 4566:4566 localstack/localstack
+
+# Create test bucket
+aws --endpoint-url=http://localhost:4566 s3 mb s3://my-test-bucket
+```
+
+3. **Run the Server**
+```bash
+# Build and run with logging
+RUST_LOG=info cargo run
+```
+
+4. **Test with Example Client**
+```bash
+# Run the test client
+RUST_LOG=info cargo run --example grpc_client --features client
+```
+
+## Architecture
 
 ```mermaid
 graph TD
@@ -16,223 +68,128 @@ graph TD
     end
 
     subgraph Processing Layer
-        subgraph Core["Engine Core"]
-            RQ[Raw Queue]
-            PQ[Processed Queue]
-        end
-        ME[MetaData Extractor]
+        Core[Engine Core]
+        Health[Health Monitor]
     end
 
     subgraph Storage Layer
         SW[Storage Writer]
-        SA[Storage Adaptor]
-        S3[AWS S3]
-        GCS[Google Cloud Storage]
+        S3[S3 Storage]
     end
 
-    subgraph Infrastructure
-        CL[Config Loader]
-        EL[Event Logger]
-    end
-
-    %% Main Data Flow
-    Client -->|gRPC Messages| LS
-    LS -->|Queue Message| RQ
-    RQ -->|Extract Metadata| ME
-    ME -->|Processed Message| PQ
-    PQ -->|Batch Messages| SW
-    SW -->|Write| SA
-    SA -->|Store| S3
-    SA -->|Store| GCS
-
-    %% Infrastructure Connections
-    CL -.->|Configure|LS
-    CL -.->|Configure|Core
-    CL -.->|Configure|SA
-    EL -.->|Log|LS
-    EL -.->|Log|Core
-    EL -.->|Log|ME
-    EL -.->|Log|SW
-
-    %% Styling
-    classDef implemented fill:#90EE90,stroke:#333,stroke-width:2px
-    classDef inProgress fill:#FFB6C1,stroke:#333,stroke-width:2px
-    classDef planned fill:#87CEEB,stroke:#333,stroke-width:2px
-    classDef queue fill:#FFF,stroke:#333,stroke-width:2px
-    classDef infrastructure fill:#F0E68C,stroke:#333,stroke-width:2px
-
-    %% Apply styles
-    class Client,LS implemented
-    class RQ,PQ queue
-    class ME,SW inProgress
-    class S3,GCS planned
-    class CL,EL infrastructure
-    class Core implemented
+    Client -->|OTLP| LS
+    LS -->|Batch| Core
+    Core -->|Write| SW
+    SW -->|Store| S3
+    Health -.->|Monitor| Core
 ```
 
-## Components
+## API Reference
 
-### Core Components:
+### gRPC Endpoints
+- `/opentelemetry.proto.collector.trace.v1.TraceService/Export`
+  - Accepts OTLP trace data
+  - Batches and stores spans
 
-- **Engine Core**: Central message processing unit
-- **Config Loader**: Configuration management
-- **Listener Server**: gRPC interface
-- **MetaData Extractor**: Message analysis and metadata extraction
-- **Storage Adaptor**: Storage interface layer
-- **Event Log**: System-wide logging
+### HTTP Endpoints
+- `GET /spans`
+  - Query recent spans
+  - Optional limit parameter
+- `GET /health`
+  - System health status
+  - Performance metrics
 
-### Component Details:
+## Configuration
 
-- **Listener Server**:
-    - Listens for proto messages over gRPC
-    - Uses msg.proto for message definitions
-    - Queues messages in Engine Core's raw data queue (RDQ)
+Configuration can be provided via:
+1. Environment variables
+2. YAML configuration file
+3. Default values
 
-- **Engine Core**:
-    - Central unit for message processing
-    - Manages raw data queue (RDQ)
-    - Coordinates parallel metadata extraction
-    - Handles processed message queue
-    - Manages FMM entity preparation and batch compression
+### Environment Variables
+```bash
+SERVER_HOST=0.0.0.0
+SERVER_PORT=50051
+STORAGE_BUCKET=my-test-bucket
+RUST_LOG=info
+```
 
-- **Storage Adaptor**:
-    - Plugin interface for different storage backends
-    - Supports GCP cloud storage and S3
-    - Config-driven storage selection
-
-- **Event Log**:
-    - Unified logging interface
-    - Comprehensive message processing tracking
-    - Integration with upstream logging systems
-
-## Technical Stack
-
-- **Async Runtime**: Tokio
-- **gRPC Framework**: Tonic
-- **Serialization**: Prost (Protocol Buffers)
-- **Logging**: Tracing
-- **Error Handling**: thiserror
-- **Configuration**: Serde
+### YAML Configuration
+```yaml
+server:
+  host: "0.0.0.0"
+  port: 50051
+storage:
+  bucket: "my-test-bucket"
+  prefix: "traces"
+processing:
+  batch_size: 100
+  batch_timeout_ms: 5000
+```
 
 ## Development
 
-### Prerequisites
-
-- Rust 1.70+
-- Protocol Buffers compiler
-- Make (for build scripts)
-
 ### Build Commands
-
 ```bash
+make setup-proto  # Setup OpenTelemetry protos
 make build       # Build the project
 make test        # Run tests
-make lint        # Run clippy and format checks
-make run         # Run the server
-make run-client  # Run the test client
-make doc         # Generate documentation
+make lint        # Run lints
+make run         # Run server
+make run-client  # Run test client
 ```
 
-### Feature Flags
-
-- `client`: Enables client code compilation
-- Default features include server-side functionality
-
-## Project Structure
-
+### Project Structure
 ```
 .
+├── proto/              # Protocol definitions
 ├── src/
-│   ├── config.rs     # Configuration structures
-│   ├── core.rs       # Engine Core implementation
-│   ├── error.rs      # Error types
-│   ├── proto/        # Protocol buffer implementations
-│   ├── server.rs     # gRPC server implementation
-│   └── storage/      # Storage adaptor interfaces
-├── proto/
-│   └── msg.proto     # Protocol buffer definitions
-└── examples/
-    └── grpc_client.rs # Test client implementation
+│   ├── config/        # Configuration
+│   ├── core/          # Processing engine
+│   ├── health/        # Health monitoring
+│   ├── proto/         # Generated code
+│   ├── server/        # gRPC server
+│   └── storage/       # Storage backend
+└── examples/          # Usage examples
 ```
 
-## Roadmap
+### Testing
+```bash
+# Unit tests
+cargo test
 
-### Q2 2024
+# Integration tests
+cargo test --test '*'
 
-- [ ] Complete MetaData Extractor implementation
-- [ ] Implement basic Storage Writer functionality
-- [ ] Add message compression
+# With logging
+RUST_LOG=debug cargo test
+```
 
-### Q3 2024
+## Monitoring
 
-- [ ] Implement AWS S3 storage adaptor
-- [ ] Add Google Cloud Storage support
-- [ ] Optimize batch processing
+### Health Metrics
+- Queue size
+- Processing latency
+- Error rates
+- Storage operations
 
-### Q4 2024
+### Logging
+```bash
+# Debug logging
+RUST_LOG=debug cargo run
 
-- [ ] Add monitoring and metrics
-- [ ] Implement advanced error recovery
-- [ ] Add support for custom storage backends
+# Trace logging
+RUST_LOG=trace cargo run
+```
 
 ## Contributing
 
-Contributions are welcome! Please check our contributing guidelines for more information.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and lints
+5. Submit a pull request
 
 ## License
 
-[MIT License]
-
-### Running the Server
-
-Run with logging enabled:
-```bash
-RUST_LOG=info cargo run
-```
-
-Or set specific log levels:
-```bash
-RUST_LOG=debug cargo run  # For more detailed logs
-RUST_LOG=trace cargo run  # For all logs
-```
-
-### Local Development with S3
-
-For local development, you can use LocalStack to simulate AWS S3:
-
-```bash
-# Start LocalStack
-docker run --rm -it -p 4566:4566 localstack/localstack
-
-# Create a test bucket
-aws --endpoint-url=http://localhost:4566 s3 mb s3://my-test-bucket
-```
-
-### Testing the Complete Flow
-
-1. Start LocalStack:
-```bash
-docker run --rm -it -p 4566:4566 localstack/localstack
-```
-
-2. Create a test bucket:
-```bash
-aws --endpoint-url=http://localhost:4566 s3 mb s3://my-test-bucket
-```
-
-3. Start the server:
-```bash
-RUST_LOG=info cargo run
-```
-
-4. In another terminal, run the test client:
-```bash
-RUST_LOG=info cargo run --example grpc_client --features client
-```
-
-5. Verify stored messages:
-```bash
-aws --endpoint-url=http://localhost:4566 s3 ls s3://my-test-bucket/messages/
-```
-
-You should see the messages stored in the S3 bucket with their content and timestamps.
+[MIT License](LICENSE)

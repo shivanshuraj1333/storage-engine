@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package opentelemetry.proto.collector.trace.v1;
+
+import "trace.proto";
+import "common.proto";
+import "resource.proto";
+
+// TraceService defines how to receive spans batches
+service TraceService {
+    // Export spans to the collector
+    rpc Export(ExportTraceServiceRequest) returns (ExportTraceServiceResponse) {}
+}
+
+// Request for sending a batch of spans to the collector
+message ExportTraceServiceRequest {
+    // ResourceSpans is the top-level struct that contains resource and spans that belong to it
+    repeated opentelemetry.proto.trace.v1.ResourceSpans resource_spans = 1;
+}
+
+// Response for sending spans to the collector
+message ExportTraceServiceResponse {
+    // Empty for now
+}
