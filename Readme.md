@@ -1,6 +1,7 @@
 # Rust Storage Engine
 
-A high-performance asynchronous message processing and storage engine built with Rust, featuring gRPC communication and modular architecture.
+A high-performance asynchronous message processing and storage engine built with Rust, featuring gRPC communication and
+modular architecture.
 
 ## Architecture Overview
 
@@ -72,6 +73,7 @@ graph TD
 ## Components
 
 ### Core Components:
+
 - **Engine Core**: Central message processing unit
 - **Config Loader**: Configuration management
 - **Listener Server**: gRPC interface
@@ -80,29 +82,31 @@ graph TD
 - **Event Log**: System-wide logging
 
 ### Component Details:
+
 - **Listener Server**:
-  - Listens for proto messages over gRPC
-  - Uses msg.proto for message definitions
-  - Queues messages in Engine Core's raw data queue (RDQ)
+    - Listens for proto messages over gRPC
+    - Uses msg.proto for message definitions
+    - Queues messages in Engine Core's raw data queue (RDQ)
 
 - **Engine Core**:
-  - Central unit for message processing
-  - Manages raw data queue (RDQ)
-  - Coordinates parallel metadata extraction
-  - Handles processed message queue
-  - Manages FMM entity preparation and batch compression
+    - Central unit for message processing
+    - Manages raw data queue (RDQ)
+    - Coordinates parallel metadata extraction
+    - Handles processed message queue
+    - Manages FMM entity preparation and batch compression
 
 - **Storage Adaptor**:
-  - Plugin interface for different storage backends
-  - Supports GCP cloud storage and S3
-  - Config-driven storage selection
+    - Plugin interface for different storage backends
+    - Supports GCP cloud storage and S3
+    - Config-driven storage selection
 
 - **Event Log**:
-  - Unified logging interface
-  - Comprehensive message processing tracking
-  - Integration with upstream logging systems
+    - Unified logging interface
+    - Comprehensive message processing tracking
+    - Integration with upstream logging systems
 
 ## Technical Stack
+
 - **Async Runtime**: Tokio
 - **gRPC Framework**: Tonic
 - **Serialization**: Prost (Protocol Buffers)
@@ -113,11 +117,13 @@ graph TD
 ## Development
 
 ### Prerequisites
+
 - Rust 1.70+
 - Protocol Buffers compiler
 - Make (for build scripts)
 
 ### Build Commands
+
 ```bash
 make build       # Build the project
 make test        # Run tests
@@ -128,10 +134,12 @@ make doc         # Generate documentation
 ```
 
 ### Feature Flags
+
 - `client`: Enables client code compilation
 - Default features include server-side functionality
 
 ## Project Structure
+
 ```
 .
 ├── src/
@@ -150,22 +158,27 @@ make doc         # Generate documentation
 ## Roadmap
 
 ### Q2 2024
+
 - [ ] Complete MetaData Extractor implementation
 - [ ] Implement basic Storage Writer functionality
 - [ ] Add message compression
 
 ### Q3 2024
+
 - [ ] Implement AWS S3 storage adaptor
 - [ ] Add Google Cloud Storage support
 - [ ] Optimize batch processing
 
 ### Q4 2024
+
 - [ ] Add monitoring and metrics
 - [ ] Implement advanced error recovery
 - [ ] Add support for custom storage backends
 
 ## Contributing
+
 Contributions are welcome! Please check our contributing guidelines for more information.
 
 ## License
+
 [MIT License]

@@ -10,18 +10,18 @@ package storage_engine;
 
 // Message definition
 message Message {
-    string id = 1;
-    string content = 2;
-    int64 timestamp = 3;
+  string id = 1;
+  string content = 2;
+  int64 timestamp = 3;
 }
 
 // Response for message processing
 message ProcessResponse {
-    bool success = 1;
-    string message = 2;
+  bool success = 1;
+  string message = 2;
 }
 
 // Storage Engine service
 service StorageEngine {
-    rpc ProcessMessage(Message) returns (ProcessResponse);
+  rpc ProcessMessage(Message) returns (ProcessResponse);
 }
