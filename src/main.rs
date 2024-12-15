@@ -8,6 +8,8 @@ use tonic::transport::Server;
 use tracing::{info, warn, Level};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+use std::time::Duration;
+
 /*  Details about libraries used
     initialized all libs
     storage engine helps in getting proto generated files
@@ -39,8 +41,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Create server and engine core
-    let listener_server = ListenerServer::new(tx);
     let mut engine_core = EngineCore::new(rx, processing_config).await?;
+    let health_check = engine_core.get_health_check();
+    let listener_server = ListenerServer::new(tx, health_check);
+
+    // Add health check logging
+    tokio::spawn({
+        let health_check = engine_core.get_health_check();
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                let status = health_check.get_health_status();
+                info!(
+                    "Health status: healthy={}, queue_size={}, total_processed={}, failed_writes={}, last_write={}",
+                    status.is_healthy,
+                    status.queue_size,
+                    status.total_processed,
+                    status.failed_writes,
+                    status.last_write
+                );
+            }
+        }
+    });
 
     // Spawn engine core processing
     tokio::spawn(async move {

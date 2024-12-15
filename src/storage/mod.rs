@@ -10,6 +10,7 @@ use async_trait::async_trait;
 pub trait StorageWriter {
     async fn write(&self, key: &str, data: &[u8]) -> Result<(), StorageError>;
     async fn write_batch(&self, entries: Vec<(&str, &[u8])>) -> Result<(), StorageError>;
+    async fn flush(&self) -> Result<(), StorageError>;
 }
 
 pub struct S3StorageWriter {
@@ -100,6 +101,11 @@ impl StorageWriter for S3StorageWriter {
         for (key, data) in entries {
             self.write(key, data).await?;
         }
+        Ok(())
+    }
+
+    async fn flush(&self) -> Result<(), StorageError> {
+        // S3 writes are immediate, no need to flush
         Ok(())
     }
 }

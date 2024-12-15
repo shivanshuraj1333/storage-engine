@@ -1,1 +1,22 @@
- 
+server:
+  host: "0.0.0.0"
+  port: 50051
+  max_connections: 1000
+
+storage:
+  bucket: "prod-storage"
+  prefix: "messages"
+  region: "us-west-2"
+
+processing:
+  batch_size: 100
+  batch_timeout_ms: 5000
+
+retry:
+  max_retries: 3
+  initial_backoff_ms: 100
+  max_backoff_ms: 1000
+
+metrics:
+  enabled: true
+  push_interval_ms: 10000 
