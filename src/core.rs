@@ -1,8 +1,8 @@
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
-use crate::proto::common::Message;
 use crate::error::ProcessingError;
+use crate::proto::common::Message;
 
 /*
     Contains the EngineCore implementation

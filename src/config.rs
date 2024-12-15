@@ -16,4 +16,4 @@ pub struct ServerConfig {
 pub struct StorageConfig {
     pub bucket: String,
     pub prefix: String,
-} 
+}

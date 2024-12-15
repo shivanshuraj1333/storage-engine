@@ -16,7 +16,7 @@ pub enum ProcessingError {
 pub enum StorageError {
     #[error("Write failed: {0}")]
     WriteFailed(String),
-    
+
     #[error("Batch write failed: {0}")]
     BatchWriteFailed(String),
-} 
+}

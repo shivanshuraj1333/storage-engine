@@ -1,7 +1,7 @@
+use crate::error::ProcessingError;
+use crate::proto::server::*;
 use tokio::sync::mpsc;
 use tonic::{Request, Response, Status};
-use crate::proto::server::*;
-use crate::error::ProcessingError;
 
 /*
     Implements the gRPC server (ListenerServer)
