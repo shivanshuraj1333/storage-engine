@@ -1,21 +1,32 @@
 use storage_engine::proto::storage_engine::storage_engine_server::StorageEngineServer;
 use storage_engine::{EngineCore, ListenerServer};
-use tokio::sync::mpsc;
-use tonic::transport::Server;
-use tracing::{info, warn};
-use tracing_subscriber::EnvFilter;
 
-async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("Failed to install CTRL+C signal handler");
-}
+use tokio::sync::mpsc;
+
+use tonic::transport::Server;
+
+use tracing::{info, warn, Level};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
+/*  Details about libraries used
+    initialized all libs
+    storage engine helps in getting proto generated files
+
+    tokio is used for async comm
+
+    tonic helps in starting the server
+
+    tracing is for logging info and warn logs
+*/
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Setup logging
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+
+    // Setup logging with explicit level
+    FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .with_env_filter(EnvFilter::from_default_env()
+            .add_directive(Level::INFO.into()))
         .init();
 
     // Create channels for message passing
@@ -35,6 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start gRPC server
     info!("Server listening on {}", addr);
+
     let server = Server::builder()
         .add_service(StorageEngineServer::new(listener_server))
         .serve(addr);
@@ -52,4 +64,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+// handles keyboard ctrl+c input as shutdown signal
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("Failed to install CTRL+C signal handler");
 }

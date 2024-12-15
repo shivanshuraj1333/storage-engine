@@ -37,7 +37,7 @@ impl EngineCore {
         }
 
         // Log processing
-        tracing::info!(
+        info!(
             "Processing message {} at timestamp {}",
             message.id, message.timestamp
         );

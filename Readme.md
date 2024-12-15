@@ -182,3 +182,16 @@ Contributions are welcome! Please check our contributing guidelines for more inf
 ## License
 
 [MIT License]
+
+### Running the Server
+
+Run with logging enabled:
+```bash
+RUST_LOG=info cargo run
+```
+
+Or set specific log levels:
+```bash
+RUST_LOG=debug cargo run  # For more detailed logs
+RUST_LOG=trace cargo run  # For all logs
+```
