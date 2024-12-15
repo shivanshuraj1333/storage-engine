@@ -195,3 +195,44 @@ Or set specific log levels:
 RUST_LOG=debug cargo run  # For more detailed logs
 RUST_LOG=trace cargo run  # For all logs
 ```
+
+### Local Development with S3
+
+For local development, you can use LocalStack to simulate AWS S3:
+
+```bash
+# Start LocalStack
+docker run --rm -it -p 4566:4566 localstack/localstack
+
+# Create a test bucket
+aws --endpoint-url=http://localhost:4566 s3 mb s3://my-test-bucket
+```
+
+### Testing the Complete Flow
+
+1. Start LocalStack:
+```bash
+docker run --rm -it -p 4566:4566 localstack/localstack
+```
+
+2. Create a test bucket:
+```bash
+aws --endpoint-url=http://localhost:4566 s3 mb s3://my-test-bucket
+```
+
+3. Start the server:
+```bash
+RUST_LOG=info cargo run
+```
+
+4. In another terminal, run the test client:
+```bash
+RUST_LOG=info cargo run --example grpc_client --features client
+```
+
+5. Verify stored messages:
+```bash
+aws --endpoint-url=http://localhost:4566 s3 ls s3://my-test-bucket/messages/
+```
+
+You should see the messages stored in the S3 bucket with their content and timestamps.

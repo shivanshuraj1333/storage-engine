@@ -1,5 +1,5 @@
 use storage_engine::proto::storage_engine::storage_engine_server::StorageEngineServer;
-use storage_engine::{EngineCore, ListenerServer};
+use storage_engine::{config::ProcessingConfig, EngineCore, ListenerServer};
 
 use tokio::sync::mpsc;
 
@@ -32,9 +32,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create channels for message passing
     let (tx, rx) = mpsc::channel(100);
 
+    // Create processing configuration
+    let processing_config = ProcessingConfig {
+        batch_size: 10,        // Process in batches of 10
+        batch_timeout_ms: 10000, // Or every 10 second
+    };
+
     // Create server and engine core
     let listener_server = ListenerServer::new(tx);
-    let mut engine_core = EngineCore::new(rx);
+    let mut engine_core = EngineCore::new(rx, processing_config).await?;
 
     // Spawn engine core processing
     tokio::spawn(async move {

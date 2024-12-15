@@ -17,6 +17,9 @@ pub enum StorageError {
     #[error("Write failed: {0}")]
     WriteFailed(String),
 
+    #[error("Connection failed: {0}")]
+    ConnectionError(String),
+
     #[error("Batch write failed: {0}")]
     BatchWriteFailed(String),
 }
