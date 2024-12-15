@@ -59,30 +59,140 @@ RUST_LOG=info cargo run --example grpc_client --features client
 
 ```mermaid
 graph TD
-    subgraph Client Layer
-        Client[gRPC Client]
+    %% Client Layer
+    subgraph Clients
+        OTLP[OpenTelemetry Client]
+        HTTP[HTTP Client]
     end
 
-    subgraph Server Layer
-        LS[Listener Server]
+    %% Server Layer
+    subgraph Server["Server Layer (src/server.rs)"]
+        GS[gRPC Server]
+        HS[HTTP Server]
+        LS[ListenerServer]
+        Router[Axum Router]
     end
 
-    subgraph Processing Layer
-        Core[Engine Core]
-        Health[Health Monitor]
+    %% Processing Layer
+    subgraph Core["Processing Layer (src/core.rs)"]
+        EC[EngineCore]
+        Queue[Message Queue]
+        Batch[Batch Processor]
+        Conv[Span Converter]
     end
 
-    subgraph Storage Layer
-        SW[Storage Writer]
-        S3[S3 Storage]
+    %% Health Monitoring
+    subgraph Health["Health Monitoring (src/health.rs)"]
+        HM[Health Monitor]
+        Metrics[Health Metrics]
+        Status[Health Status]
     end
 
-    Client -->|OTLP| LS
-    LS -->|Batch| Core
-    Core -->|Write| SW
-    SW -->|Store| S3
-    Health -.->|Monitor| Core
+    %% Storage Layer
+    subgraph Storage["Storage Layer (src/storage/mod.rs)"]
+        SW[StorageWriter Trait]
+        S3W[S3StorageWriter]
+        Reader[SpanReader]
+    end
+
+    %% Config Layer
+    subgraph Config["Configuration (src/config.rs)"]
+        Env[Environment]
+        YAML[YAML Config]
+        Defaults[Default Values]
+    end
+
+    %% Error Handling
+    subgraph Errors["Error Handling (src/error.rs)"]
+        PE[ProcessingError]
+        SE[StorageError]
+        CE[ConfigError]
+    end
+
+    %% Data Flow
+    OTLP -->|OTLP Protocol| GS
+    HTTP -->|REST| HS
+    GS --> LS
+    HS --> Router
+    Router --> Reader
+    LS -->|Channel| Queue
+    Queue --> EC
+    EC --> Batch
+    Batch --> Conv
+    Conv --> SW
+    SW --> S3W
+    S3W -->|Write| S3[(S3 Storage)]
+    Reader -->|Read| S3W
+
+    %% Monitoring Flow
+    EC -.->|Report| HM
+    S3W -.->|Report| HM
+    HM -->|Update| Metrics
+    Metrics -->|Expose| Status
+    Router -->|Query| Status
+
+    %% Configuration Flow
+    Env -->|Load| Config
+    YAML -->|Parse| Config
+    Defaults -->|Fallback| Config
+    Config -->|Configure| EC
+    Config -->|Configure| S3W
+
+    %% Error Flow
+    EC -.->|Emit| PE
+    S3W -.->|Emit| SE
+    Config -.->|Emit| CE
+
+    %% Styling
+    classDef primary fill:#f9f,stroke:#333,stroke-width:2px
+    classDef secondary fill:#bbf,stroke:#333,stroke-width:2px
+    classDef storage fill:#bfb,stroke:#333,stroke-width:2px
+    classDef monitoring fill:#fbb,stroke:#333,stroke-width:2px
+    classDef config fill:#ffb,stroke:#333,stroke-width:2px
+    classDef error fill:#fdd,stroke:#333,stroke-width:2px
+
+    class EC,GS,LS,S3W primary
+    class Queue,Batch,Conv,Router secondary
+    class SW,Reader,S3 storage
+    class HM,Metrics,Status monitoring
+    class Config,Env,YAML,Defaults config
+    class PE,SE,CE error
 ```
+
+### Component Details
+
+1. **Server Layer**
+   - `ListenerServer`: Handles gRPC trace collection
+   - `Router`: Manages HTTP endpoints for querying
+   - Supports both OTLP and REST protocols
+
+2. **Processing Layer**
+   - `EngineCore`: Central processing unit
+   - Message queuing and batching
+   - Span conversion and validation
+
+3. **Health Monitoring**
+   - Real-time health metrics
+   - Queue size monitoring
+   - Error rate tracking
+   - Performance statistics
+
+4. **Storage Layer**
+   - `StorageWriter` trait for storage abstraction
+   - S3-compatible implementation
+   - Efficient span organization
+   - Query capabilities
+
+5. **Configuration**
+   - Environment variables
+   - YAML configuration
+   - Sensible defaults
+   - Runtime validation
+
+6. **Error Handling**
+   - Structured error types
+   - Error propagation
+   - Graceful failure handling
 
 ## API Reference
 
