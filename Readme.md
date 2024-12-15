@@ -149,8 +149,8 @@ graph TD
     S3W -.->|"Error"| Errors
 
     %% Styling for planned components
-    classDef planned fill:#f1f3f5,stroke:#868e96,stroke-dasharray: 5 5
-    
+    classDef planned fill:#f1f3f5,stroke:#868e96,stroke-dasharray:5,5
+
     %% Notes
     subgraph Legend
         direction LR
@@ -158,6 +158,7 @@ graph TD
         Planned[Planned]:::planned
         style Implemented fill:#e9ecef,stroke:#495057
     end
+
 ```
 
 ### Component Details
