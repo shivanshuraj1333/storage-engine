@@ -60,9 +60,11 @@ RUST_LOG=info cargo run --example grpc_client --features client
 ```mermaid
 graph TD
     %% Client Layer
-    subgraph Clients
+    subgraph Clients["External Clients"]
         OTLP[OpenTelemetry Client]
         HTTP[HTTP Client]
+        style OTLP fill:#e9ecef,stroke:#495057
+        style HTTP fill:#e9ecef,stroke:#495057
     end
 
     %% Server Layer
@@ -71,6 +73,10 @@ graph TD
         HS[HTTP Server]
         LS[ListenerServer]
         Router[Axum Router]
+        style GS fill:#dbe4ff,stroke:#364fc7
+        style HS fill:#dbe4ff,stroke:#364fc7
+        style LS fill:#dbe4ff,stroke:#364fc7
+        style Router fill:#dbe4ff,stroke:#364fc7
     end
 
     %% Processing Layer
@@ -78,7 +84,12 @@ graph TD
         EC[EngineCore]
         Queue[Message Queue]
         Batch[Batch Processor]
+        ME[Metadata Extractor]:::planned
         Conv[Span Converter]
+        style EC fill:#d3f9d8,stroke:#2b8a3e
+        style Queue fill:#d3f9d8,stroke:#2b8a3e
+        style Batch fill:#d3f9d8,stroke:#2b8a3e
+        style Conv fill:#d3f9d8,stroke:#2b8a3e
     end
 
     %% Health Monitoring
@@ -86,6 +97,9 @@ graph TD
         HM[Health Monitor]
         Metrics[Health Metrics]
         Status[Health Status]
+        style HM fill:#fff3bf,stroke:#94710c
+        style Metrics fill:#fff3bf,stroke:#94710c
+        style Status fill:#fff3bf,stroke:#94710c
     end
 
     %% Storage Layer
@@ -93,106 +107,96 @@ graph TD
         SW[StorageWriter Trait]
         S3W[S3StorageWriter]
         Reader[SpanReader]
+        style SW fill:#d0bfff,stroke:#5f3dc4
+        style S3W fill:#d0bfff,stroke:#5f3dc4
+        style Reader fill:#d0bfff,stroke:#5f3dc4
     end
 
-    %% Config Layer
-    subgraph Config["Configuration (src/config.rs)"]
-        Env[Environment]
-        YAML[YAML Config]
-        Defaults[Default Values]
+    %% Config & Error Layer
+    subgraph Infrastructure["Infrastructure"]
+        direction TB
+        Config[Configuration]
+        Errors[Error Handling]
+        style Config fill:#ffd8a8,stroke:#d9480f
+        style Errors fill:#ffd8a8,stroke:#d9480f
     end
 
-    %% Error Handling
-    subgraph Errors["Error Handling (src/error.rs)"]
-        PE[ProcessingError]
-        SE[StorageError]
-        CE[ConfigError]
-    end
-
-    %% Data Flow
-    OTLP -->|OTLP Protocol| GS
-    HTTP -->|REST| HS
+    %% Data Flow - Main Path
+    OTLP -->|"1. OTLP Protocol"| GS
+    HTTP -->|"1. REST"| HS
     GS --> LS
     HS --> Router
-    Router --> Reader
-    LS -->|Channel| Queue
+    LS -->|"2. Channel"| Queue
     Queue --> EC
     EC --> Batch
-    Batch --> Conv
+    Batch --> ME
+    ME --> Conv
     Conv --> SW
     SW --> S3W
-    S3W -->|Write| S3[(S3 Storage)]
-    Reader -->|Read| S3W
+    S3W -->|"3. Persist"| S3[(S3 Storage)]
+    Reader -->|"4. Query"| S3W
+    Router --> Reader
 
-    %% Monitoring Flow
-    EC -.->|Report| HM
-    S3W -.->|Report| HM
-    HM -->|Update| Metrics
-    Metrics -->|Expose| Status
-    Router -->|Query| Status
-
-    %% Configuration Flow
-    Env -->|Load| Config
-    YAML -->|Parse| Config
-    Defaults -->|Fallback| Config
-    Config -->|Configure| EC
-    Config -->|Configure| S3W
+    %% Monitoring & Config Flow
+    EC -.->|"Report"| HM
+    S3W -.->|"Report"| HM
+    HM -->|"Update"| Metrics
+    Config -.->|"Configure"| EC
+    Config -.->|"Configure"| S3W
 
     %% Error Flow
-    EC -.->|Emit| PE
-    S3W -.->|Emit| SE
-    Config -.->|Emit| CE
+    EC -.->|"Error"| Errors
+    S3W -.->|"Error"| Errors
 
-    %% Styling
-    classDef primary fill:#f9f,stroke:#333,stroke-width:2px
-    classDef secondary fill:#bbf,stroke:#333,stroke-width:2px
-    classDef storage fill:#bfb,stroke:#333,stroke-width:2px
-    classDef monitoring fill:#fbb,stroke:#333,stroke-width:2px
-    classDef config fill:#ffb,stroke:#333,stroke-width:2px
-    classDef error fill:#fdd,stroke:#333,stroke-width:2px
-
-    class EC,GS,LS,S3W primary
-    class Queue,Batch,Conv,Router secondary
-    class SW,Reader,S3 storage
-    class HM,Metrics,Status monitoring
-    class Config,Env,YAML,Defaults config
-    class PE,SE,CE error
+    %% Styling for planned components
+    classDef planned fill:#f1f3f5,stroke:#868e96,stroke-dasharray: 5 5
+    
+    %% Notes
+    subgraph Legend
+        direction LR
+        Implemented[Implemented]
+        Planned[Planned]:::planned
+        style Implemented fill:#e9ecef,stroke:#495057
+    end
 ```
 
 ### Component Details
 
-1. **Server Layer**
-   - `ListenerServer`: Handles gRPC trace collection
-   - `Router`: Manages HTTP endpoints for querying
-   - Supports both OTLP and REST protocols
+1. **Server Layer** `(Implemented)`
+   - Handles incoming OTLP and HTTP requests
+   - Routes requests to appropriate handlers
+   - Manages connection lifecycle
 
 2. **Processing Layer**
-   - `EngineCore`: Central processing unit
-   - Message queuing and batching
-   - Span conversion and validation
+   - `EngineCore`: Central processing unit `(Implemented)`
+   - `Message Queue`: Async message handling `(Implemented)`
+   - `Metadata Extractor`: Span metadata analysis `(Planned)`
+   - `Batch Processor`: Efficient batch operations `(Implemented)`
 
-3. **Health Monitoring**
-   - Real-time health metrics
-   - Queue size monitoring
-   - Error rate tracking
-   - Performance statistics
-
-4. **Storage Layer**
-   - `StorageWriter` trait for storage abstraction
+3. **Storage Layer** `(Implemented)`
+   - Abstract storage interface
    - S3-compatible implementation
-   - Efficient span organization
-   - Query capabilities
+   - Span querying capabilities
+   - Data organization
 
-5. **Configuration**
-   - Environment variables
-   - YAML configuration
-   - Sensible defaults
-   - Runtime validation
+4. **Health Monitoring** `(Implemented)`
+   - System health tracking
+   - Performance metrics
+   - Resource utilization
+   - Error rate monitoring
 
-6. **Error Handling**
-   - Structured error types
-   - Error propagation
-   - Graceful failure handling
+5. **Infrastructure**
+   - Configuration management `(Implemented)`
+   - Error handling `(Implemented)`
+   - Logging and metrics `(Implemented)`
+
+### Planned Features
+
+1. **Metadata Extractor**
+   - Service dependency mapping
+   - Performance pattern detection
+   - Anomaly identification
+   - Relationship analysis
 
 ## API Reference
 
@@ -273,23 +277,6 @@ cargo test --test '*'
 
 # With logging
 RUST_LOG=debug cargo test
-```
-
-## Monitoring
-
-### Health Metrics
-- Queue size
-- Processing latency
-- Error rates
-- Storage operations
-
-### Logging
-```bash
-# Debug logging
-RUST_LOG=debug cargo run
-
-# Trace logging
-RUST_LOG=trace cargo run
 ```
 
 ## Contributing
