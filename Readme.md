@@ -59,106 +59,145 @@ RUST_LOG=info cargo run --example grpc_client --features client
 
 ```mermaid
 graph TD
-    %% Client Layer
+
+    %% ---------------------------------------------
+    %%  GLOBAL STYLES
+    %% ---------------------------------------------
+    classDef default font-size:14px
+
+    %% ---------------------------------------------
+    %%  CLIENT LAYER
+    %% ---------------------------------------------
     subgraph Clients["External Clients"]
         OTLP[OpenTelemetry Client]
         HTTP[HTTP Client]
-        style OTLP fill:#e9ecef,stroke:#495057
-        style HTTP fill:#e9ecef,stroke:#495057
+        style OTLP fill:#E9ECEF,stroke:#495057,color:#000
+        style HTTP fill:#E9ECEF,stroke:#495057,color:#000
     end
 
-    %% Server Layer
+    %% ---------------------------------------------
+    %%  SERVER LAYER
+    %% ---------------------------------------------
     subgraph Server["Server Layer (src/server.rs)"]
         GS[gRPC Server]
         HS[HTTP Server]
         LS[ListenerServer]
         Router[Axum Router]
-        style GS fill:#dbe4ff,stroke:#364fc7
-        style HS fill:#dbe4ff,stroke:#364fc7
-        style LS fill:#dbe4ff,stroke:#364fc7
-        style Router fill:#dbe4ff,stroke:#364fc7
+        style GS fill:#DBE4FF,stroke:#364FC7,color:#000
+        style HS fill:#DBE4FF,stroke:#364FC7,color:#000
+        style LS fill:#DBE4FF,stroke:#364FC7,color:#000
+        style Router fill:#DBE4FF,stroke:#364FC7,color:#000
     end
 
-    %% Processing Layer
+    %% ---------------------------------------------
+    %%  PROCESSING LAYER
+    %% ---------------------------------------------
     subgraph Core["Processing Layer (src/core.rs)"]
         EC[EngineCore]
         Queue[Message Queue]
         Batch[Batch Processor]
         ME[Metadata Extractor]:::planned
         Conv[Span Converter]
-        style EC fill:#d3f9d8,stroke:#2b8a3e
-        style Queue fill:#d3f9d8,stroke:#2b8a3e
-        style Batch fill:#d3f9d8,stroke:#2b8a3e
-        style Conv fill:#d3f9d8,stroke:#2b8a3e
+        style EC fill:#D3F9D8,stroke:#2B8A3E,color:#000
+        style Queue fill:#D3F9D8,stroke:#2B8A3E,color:#000
+        style Batch fill:#D3F9D8,stroke:#2B8A3E,color:#000
+        style Conv fill:#D3F9D8,stroke:#2B8A3E,color:#000
     end
 
-    %% Health Monitoring
+    %% ---------------------------------------------
+    %%  HEALTH MONITORING
+    %% ---------------------------------------------
     subgraph Health["Health Monitoring (src/health.rs)"]
         HM[Health Monitor]
         Metrics[Health Metrics]
         Status[Health Status]
-        style HM fill:#fff3bf,stroke:#94710c
-        style Metrics fill:#fff3bf,stroke:#94710c
-        style Status fill:#fff3bf,stroke:#94710c
+        style HM fill:#FFF3BF,stroke:#94710C,color:#000
+        style Metrics fill:#FFF3BF,stroke:#94710C,color:#000
+        style Status fill:#FFF3BF,stroke:#94710C,color:#000
     end
 
-    %% Storage Layer
+    %% ---------------------------------------------
+    %%  STORAGE LAYER
+    %% ---------------------------------------------
     subgraph Storage["Storage Layer (src/storage/mod.rs)"]
         SW[StorageWriter Trait]
         S3W[S3StorageWriter]
         Reader[SpanReader]
-        style SW fill:#d0bfff,stroke:#5f3dc4
-        style S3W fill:#d0bfff,stroke:#5f3dc4
-        style Reader fill:#d0bfff,stroke:#5f3dc4
+        style SW fill:#D0BFFF,stroke:#5F3DC4,color:#000
+        style S3W fill:#D0BFFF,stroke:#5F3DC4,color:#000
+        style Reader fill:#D0BFFF,stroke:#5F3DC4,color:#000
     end
 
-    %% Config & Error Layer
+    %% ---------------------------------------------
+    %%  INFRASTRUCTURE (CONFIG + ERRORS)
+    %% ---------------------------------------------
     subgraph Infrastructure["Infrastructure"]
         direction TB
         Config[Configuration]
         Errors[Error Handling]
-        style Config fill:#ffd8a8,stroke:#d9480f
-        style Errors fill:#ffd8a8,stroke:#d9480f
+        style Config fill:#FFD8A8,stroke:#D9480F,color:#000
+        style Errors fill:#FFD8A8,stroke:#D9480F,color:#000
     end
 
-    %% Data Flow - Main Path
-    OTLP -->|"1. OTLP Protocol"| GS
-    HTTP -->|"1. REST"| HS
+    %% ---------------------------------------------
+    %%  DATA FLOW - MAIN PATH
+    %% ---------------------------------------------
+    OTLP -->|"OTLP Protocol"| GS
+    HTTP -->|"REST Endpoint"| HS
     GS --> LS
     HS --> Router
-    LS -->|"2. Channel"| Queue
+    LS -->|"Channel"| Queue
     Queue --> EC
     EC --> Batch
     Batch --> ME
     ME --> Conv
     Conv --> SW
     SW --> S3W
-    S3W -->|"3. Persist"| S3[(S3 Storage)]
-    Reader -->|"4. Query"| S3W
+    S3W -->|"Persist"| S3[(S3 Storage)]
+    Reader -->|"Query"| S3W
     Router --> Reader
 
-    %% Monitoring & Config Flow
+    %% ---------------------------------------------
+    %%  MONITORING & CONFIG FLOW
+    %% ---------------------------------------------
     EC -.->|"Report"| HM
     S3W -.->|"Report"| HM
     HM -->|"Update"| Metrics
     Config -.->|"Configure"| EC
     Config -.->|"Configure"| S3W
 
-    %% Error Flow
+    %% ---------------------------------------------
+    %%  ERROR FLOW
+    %% ---------------------------------------------
     EC -.->|"Error"| Errors
     S3W -.->|"Error"| Errors
 
-    %% Styling for planned components
-    classDef planned fill:#f1f3f5,stroke:#868e96,stroke-dasharray:5,5
+    %% ---------------------------------------------
+    %%  STYLING FOR PLANNED COMPONENTS
+    %% ---------------------------------------------
+    classDef planned fill:#F1F3F5,stroke:#868E96,stroke-dasharray:5,5,color:#000
 
-    %% Notes
+    %% ---------------------------------------------
+    %%  LEGEND
+    %% ---------------------------------------------
     subgraph Legend
         direction LR
         Implemented[Implemented]
         Planned[Planned]:::planned
-        style Implemented fill:#e9ecef,stroke:#495057
+        style Implemented fill:#E9ECEF,stroke:#495057,color:#000
     end
 
+    %% ---------------------------------------------
+    %%  SUBGRAPH STYLES
+    %% ---------------------------------------------
+    %% Make subgraph backgrounds match their nodes & show subgraph titles in black
+    style Clients fill:#E9ECEF,stroke:#495057,color:#000
+    style Server fill:#DBE4FF,stroke:#364FC7,color:#000
+    style Core fill:#D3F9D8,stroke:#2B8A3E,color:#000
+    style Health fill:#FFF3BF,stroke:#94710C,color:#000
+    style Storage fill:#D0BFFF,stroke:#5F3DC4,color:#000
+    style Infrastructure fill:#FFD8A8,stroke:#D9480F,color:#000
+    style Legend fill:#E9ECEF,stroke:#495057,color:#000
 ```
 
 ### Component Details
